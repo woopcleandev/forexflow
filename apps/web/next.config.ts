@@ -5,10 +5,8 @@ import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import dotenv from "dotenv"
 
-// Single source of truth for env: repo-root `.env.local`. If a legacy
-// apps/web/.env.local is present it's an error — run `pnpm setup:env` at
-// the repo root to migrate. Two env files drifting was the incident that
-// motivated this refactor.
+// Local installs share one repo-root env file. Hosted deployments can supply
+// the same variables through their environment without creating a secret file.
 const repoRoot = resolve(import.meta.dirname, "../..")
 const rootEnvPath = resolve(repoRoot, ".env.local")
 const legacyWebEnvPath = resolve(import.meta.dirname, ".env.local")
@@ -18,13 +16,13 @@ if (existsSync(legacyWebEnvPath)) {
     "apps/web/.env.local exists and is no longer supported. Run `pnpm setup:env` at the repo root to migrate your values into .env.local, then restart.",
   )
 }
-if (!existsSync(rootEnvPath)) {
-  throw new Error(
-    `No .env.local found at repo root (${rootEnvPath}). Create it (see README.md for the template), or run \`pnpm setup:env\` if you have legacy per-app env files to migrate.`,
-  )
+if (existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath })
 }
-dotenv.config({ path: rootEnvPath })
-dotenv.config({ path: resolve(repoRoot, ".env") })
+const rootDotEnvPath = resolve(repoRoot, ".env")
+if (existsSync(rootDotEnvPath)) {
+  dotenv.config({ path: rootDotEnvPath })
+}
 
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
@@ -48,7 +46,9 @@ try {
 const appVersion = buildSha === "local" ? baseVersion : `${baseVersion}+${commitCount}`
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Electron/self-hosted installs need the standalone server; Vercel bundles
+  // its own functions and does not run the custom server.
+  output: process.env.VERCEL === "1" ? undefined : "standalone",
   outputFileTracingRoot: resolve(import.meta.dirname, "../../"),
   // Include native libsql binaries that Next.js file tracing can't auto-detect.
   // libsql uses dynamic require(`@libsql/${platform}`) which can't be traced statically.
@@ -56,6 +56,8 @@ const nextConfig: NextConfig = {
     "/**": [
       "../../node_modules/.pnpm/@libsql+darwin-arm64@*/node_modules/@libsql/darwin-arm64/**/*",
       "../../node_modules/.pnpm/@libsql+darwin-x64@*/node_modules/@libsql/darwin-x64/**/*",
+      "../../node_modules/.pnpm/@libsql+linux-*@*/node_modules/@libsql/linux-*/**/*",
+      "../../docs/**/*.md",
     ],
   },
   env: {

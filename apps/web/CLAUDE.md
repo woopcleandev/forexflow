@@ -128,7 +128,7 @@ Every feature page follows this structure:
 ## Gotchas
 
 - `middleware.ts` handles auth — public paths are exempted (api/auth, static assets).
-- **Middleware always fetches `http://localhost:${PORT}/api/auth/status`** — never `request.nextUrl.origin`, which fails when the request arrives via a tunnel URL.
+- **Middleware auth URL**: self-hosted installs fetch `http://localhost:${PORT}/api/auth/status` to avoid tunnel round trips. With `VERCEL=1`, fetch `request.nextUrl.origin` and forward cookies for deployment protection. Auth-check failures return HTTP 503 rather than allowing protected requests.
 - API routes that proxy to daemon must handle daemon-down errors gracefully.
 - WS reconnection is handled automatically by `use-daemon-connection.ts`.
 - `use-daemon-status.ts` vs `use-daemon-connection.ts`: status is the consumer hook, connection is the provider. **Never import `use-daemon-connection` directly from components or hooks** — always use `useDaemonStatus()` which reads from the shared context. Direct calls create per-component WebSocket connections.

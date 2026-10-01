@@ -1,0 +1,50 @@
+name: Vercel web check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/vercel-check.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/vercel-check.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Build-only placeholders. No live database, credentials, or daemon.
+      DATABASE_URL: "file:/tmp/fxflow-vercel-check.db"
+      DAEMON_REST_URL: "https://daemon.example.com"
+      NEXT_PUBLIC_DAEMON_URL: "wss://daemon.example.com"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @fxflow/web typecheck
+      - run: pnpm exec vitest run apps/web/src/middleware.test.ts apps/web/src/lib/api-validation.test.ts
+      - run: pnpm --filter @fxflow/web build

@@ -68,9 +68,10 @@ function resolveDaemonUrls(): { wsUrl: string; restUrl: string } {
     }
   }
 
-  // Remote: proxy through same origin
+  // Hosted Next.js does not run server.ts's /ws proxy. An explicit public
+  // WebSocket URL connects to the external daemon; REST stays same-origin.
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-  const wsUrl = `${wsProtocol}//${window.location.host}/ws`
+  const wsUrl = process.env.NEXT_PUBLIC_DAEMON_URL ?? `${wsProtocol}//${window.location.host}/ws`
   const restUrl = "" // REST calls go through Next.js API routes (same origin)
   return { wsUrl, restUrl }
 }

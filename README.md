@@ -248,6 +248,9 @@ The AI Trader can optionally use FRED and Alpha Vantage API keys for macroeconom
 
 ### Remote Access (optional)
 
+To host the web app on Vercel with a cloud database and external daemon, follow
+the [Vercel deployment guide](docs/dev/09-vercel-deployment.md).
+
 Access FXFlow from your phone or any device — zero configuration needed:
 
 ```bash

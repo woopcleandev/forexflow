@@ -23,17 +23,19 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next()
   }
 
-  // Check auth status via internal API — always use localhost so the fetch
-  // works even when the request came through an external tunnel URL
+  // Self-hosted installs use loopback to avoid tunnel round trips. On Vercel,
+  // use the incoming origin and forward cookies for deployment protection.
   const port = process.env.PORT ?? "3000"
-  const baseUrl = `http://localhost:${port}`
+  const baseUrl = process.env.VERCEL === "1" ? request.nextUrl.origin : `http://localhost:${port}`
   try {
     const res = await fetch(`${baseUrl}/api/auth/status`, {
       headers: { cookie: request.headers.get("cookie") ?? "" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
     })
 
     if (!res.ok) {
-      return NextResponse.redirect(new URL("/login", request.url))
+      return authUnavailable()
     }
 
     const json = (await res.json()) as {
@@ -42,7 +44,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     }
 
     if (!json.ok || !json.data) {
-      return NextResponse.redirect(new URL("/login", request.url))
+      return authUnavailable()
     }
 
     // No PIN set → only allow /setup
@@ -77,9 +79,16 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.next()
   } catch {
-    // If auth check fails (e.g., during startup), allow the request
-    return NextResponse.next()
+    // A failed auth check must not expose protected pages or API routes.
+    return authUnavailable()
   }
+}
+
+function authUnavailable(): NextResponse {
+  return NextResponse.json(
+    { ok: false, error: "Authentication temporarily unavailable. Please try again." },
+    { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "5" } },
+  )
 }
 
 export const config = {
